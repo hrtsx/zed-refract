@@ -1,4 +1,7 @@
-use zed_extension_api::{self as zed, LanguageServerId, Result, serde_json};
+use zed_extension_api::{
+    self as zed, serde_json, Architecture, DownloadedFileType, GithubReleaseOptions,
+    LanguageServerId, Os, Result, settings::LspSettings,
+};
 
 struct RefractExtension {
     cached_binary: Option<String>,
@@ -14,27 +17,16 @@ impl zed::Extension for RefractExtension {
         _language_server_id: &LanguageServerId,
         worktree: &zed::Worktree,
     ) -> Result<zed::Command> {
-        // Use user-configured path if set
-        let settings = zed::LanguageServerSettings::for_worktree("refract", worktree)?;
-        if let Some(path) = settings.binary.as_ref().and_then(|b| b.path.as_ref()) {
-            return Ok(zed::Command {
-                command: path.clone(),
-                args: vec![],
-                env: Default::default(),
-            });
+        // 1. User-configured path
+        if let Some(path) = LspSettings::for_worktree("refract", worktree)
+            .ok()
+            .and_then(|s| s.binary)
+            .and_then(|b| b.path)
+        {
+            return Ok(zed::Command { command: path, args: vec![], env: Default::default() });
         }
 
-        // Check PATH first (user installed manually)
-        if let Some(path) = worktree.which("refract") {
-            self.cached_binary = Some(path.clone());
-            return Ok(zed::Command {
-                command: path,
-                args: vec![],
-                env: Default::default(),
-            });
-        }
-
-        // Download from GitHub releases
+        // 2. Already cached from a previous download
         if let Some(cached) = &self.cached_binary {
             return Ok(zed::Command {
                 command: cached.clone(),
@@ -43,32 +35,30 @@ impl zed::Extension for RefractExtension {
             });
         }
 
+        // 3. Binary in PATH (user installed manually)
+        if let Some(path) = worktree.which("refract") {
+            return Ok(zed::Command { command: path, args: vec![], env: Default::default() });
+        }
+
+        // 4. Download from GitHub releases
         let release = zed::latest_github_release(
             "hrtsx/refract",
-            zed::GithubReleaseOptions { require_assets: true, pre_release: false },
+            GithubReleaseOptions { require_assets: true, pre_release: false },
         )?;
 
-        let asset_name = asset_name();
+        let asset_name = asset_name()?;
         let asset = release
             .assets
             .iter()
             .find(|a| a.name == asset_name)
-            .ok_or_else(|| format!("no asset {asset_name} in release {}", release.version))?;
+            .ok_or_else(|| format!("no asset '{asset_name}' in release {}", release.version))?;
 
-        let binary_path = zed::download_file(
-            &asset.download_url,
-            &format!("refract-{}", release.version),
-            zed::DownloadedFileType::Uncompressed,
-        )?;
-
+        let binary_path = format!("refract-{}", release.version);
+        zed::download_file(&asset.download_url, &binary_path, DownloadedFileType::Uncompressed)?;
         zed::make_file_executable(&binary_path)?;
-        self.cached_binary = Some(binary_path.clone());
 
-        Ok(zed::Command {
-            command: binary_path,
-            args: vec![],
-            env: Default::default(),
-        })
+        self.cached_binary = Some(binary_path.clone());
+        Ok(zed::Command { command: binary_path, args: vec![], env: Default::default() })
     }
 
     fn language_server_initialization_options(
@@ -76,21 +66,24 @@ impl zed::Extension for RefractExtension {
         _language_server_id: &LanguageServerId,
         worktree: &zed::Worktree,
     ) -> Result<Option<serde_json::Value>> {
-        let settings = zed::LanguageServerSettings::for_worktree("refract", worktree)?;
-        Ok(settings.initialization_options.clone())
+        LspSettings::for_worktree("refract", worktree)
+            .map(|s| s.initialization_options)
     }
 }
 
-fn asset_name() -> String {
-    let os = match std::env::consts::OS {
-        "macos" => "macos",
-        _ => "linux",
+fn asset_name() -> Result<String> {
+    let (os, arch) = zed::current_platform();
+    let os_str = match os {
+        Os::Mac => "macos",
+        Os::Linux => "linux",
+        Os::Windows => return Err("Windows is not supported".into()),
     };
-    let arch = match std::env::consts::ARCH {
-        "aarch64" => "aarch64",
-        _ => "x86_64",
+    let arch_str = match arch {
+        Architecture::Aarch64 => "aarch64",
+        Architecture::X8664 => "x86_64",
+        other => return Err(format!("unsupported architecture: {other:?}").into()),
     };
-    format!("refract-{arch}-{os}")
+    Ok(format!("refract-{arch_str}-{os_str}"))
 }
 
 zed::register_extension!(RefractExtension);
