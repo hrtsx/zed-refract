@@ -1,0 +1,11 @@
+id = "refract"
+name = "Refract"
+version = "0.1.0"
+schema_version = 1
+description = "Ruby language server — type-aware completion, hover, MRO-aware rename, Rails intelligence"
+authors = ["hrtsx"]
+repository = "https://github.com/hrtsx/zed-refract"
+
+[language_servers.refract]
+name = "Refract"
+language = "Ruby"
