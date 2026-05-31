@@ -43,7 +43,7 @@ impl zed::Extension for RefractExtension {
         // 4. Download from GitHub releases
         let release = zed::latest_github_release(
             "hrtsx/refract",
-            GithubReleaseOptions { require_assets: true, pre_release: false },
+            GithubReleaseOptions { require_assets: true, pre_release: true },
         )?;
 
         let asset_name = asset_name()?;

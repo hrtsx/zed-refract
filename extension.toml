@@ -1,6 +1,6 @@
 id = "refract"
 name = "Refract"
-version = "0.1.0"
+version = "0.1.0-rc.1"
 schema_version = 1
 description = "Ruby language server — type-aware completion, hover, MRO-aware rename, Rails intelligence"
 authors = ["hrtsx"]

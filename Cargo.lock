@@ -740,7 +740,7 @@ dependencies = [
 
 [[package]]
 name = "zed-refract"
-version = "0.1.0"
+version = "0.1.0-rc.1"
 dependencies = [
  "zed_extension_api",
 ]
